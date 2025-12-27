@@ -1,6 +1,14 @@
-let messages = [];
+import { Redis } from "@upstash/redis";
 
-export default function handler(req, res) {
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
+
+const KEY = "chat_messages";
+const MAX_MESSAGES = 50;
+
+export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -10,32 +18,30 @@ export default function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    const { name, thumbnail, message } = req.body || {};
+    const { name, message, thumbnail } = req.body;
 
     if (!name || !message) {
-      return res.status(400).json({ error: "Invalid data" });
+      return res.status(400).json({ error: "invalid" });
     }
 
-    const data = {
-      id: Date.now() + Math.random(),
+    const msg = {
+      id: crypto.randomUUID(),
       name,
-      thumbnail: thumbnail || "",
       message,
-      time: Date.now()
+      thumbnail,
+      time: Date.now(),
     };
 
-    messages.push(data);
-
-    if (messages.length > 100) {
-      messages.shift();
-    }
+    await redis.rpush(KEY, msg);
+    await redis.ltrim(KEY, -MAX_MESSAGES, -1);
 
     return res.status(200).json({ ok: true });
   }
 
   if (req.method === "GET") {
+    const messages = await redis.lrange(KEY, 0, -1);
     return res.status(200).json(messages);
   }
 
   res.status(405).end();
-  }
+}
