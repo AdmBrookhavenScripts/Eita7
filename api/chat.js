@@ -1,5 +1,4 @@
 import { Redis } from "@upstash/redis";
-import crypto from "crypto";
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL,
@@ -11,11 +10,6 @@ const MAX_MESSAGES = 50;
 
 export default async function handler(req, res) {
   try {
-    if (req.method === "GET") {
-      const messages = await redis.lrange(KEY, 0, -1);
-      return res.status(200).json(messages || []);
-    }
-
     if (req.method === "POST") {
       const { name, message, thumbnail } = req.body || {};
 
@@ -27,7 +21,7 @@ export default async function handler(req, res) {
         id: crypto.randomUUID(),
         name,
         message,
-        thumbnail,
+        thumbnail: thumbnail || "",
         time: Date.now(),
       };
 
@@ -37,9 +31,14 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    if (req.method === "GET") {
+      const messages = await redis.lrange(KEY, 0, -1);
+      return res.status(200).json(messages);
+    }
+
     return res.status(405).json({ error: "Method not allowed" });
   } catch (err) {
     console.error(err);
-    return res.status(200).json([]);
+    return res.status(500).json([]);
   }
 }
